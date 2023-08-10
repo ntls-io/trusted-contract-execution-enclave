@@ -15,13 +15,13 @@ wasmi-impl = { path = "../wasmi-impl" }
 wasmi = { version = "0.11.0", default-features = false }
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies] # You can remove what you don't need, except types and tstd
-sgx_types = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "e8a9fc22939befa27ff67f5509b2c2dfe8499945" }
-sgx_tstd = { git = "https://github.com/apache/teaclave-sgx-sdk.git", features = ["backtrace"], rev = "e8a9fc22939befa27ff67f5509b2c2dfe8499945" }
-sgx_tcrypto = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "e8a9fc22939befa27ff67f5509b2c2dfe8499945" }
-sgx_trts = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "e8a9fc22939befa27ff67f5509b2c2dfe8499945" }
-sgx_tseal = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "e8a9fc22939befa27ff67f5509b2c2dfe8499945" }
-sgx_serialize = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "e8a9fc22939befa27ff67f5509b2c2dfe8499945" }
-sgx_alloc = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "e8a9fc22939befa27ff67f5509b2c2dfe8499945" }
-sgx_libc = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "e8a9fc22939befa27ff67f5509b2c2dfe8499945" }
+sgx_types = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "3c903bdac4e503dd27b9b1f761c4abfc55f2464c" }
+sgx_tstd = { git = "https://github.com/apache/teaclave-sgx-sdk.git", features = ["backtrace"], rev = "3c903bdac4e503dd27b9b1f761c4abfc55f2464c" }
+sgx_tcrypto = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "3c903bdac4e503dd27b9b1f761c4abfc55f2464c" }
+sgx_trts = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "3c903bdac4e503dd27b9b1f761c4abfc55f2464c" }
+sgx_tseal = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "3c903bdac4e503dd27b9b1f761c4abfc55f2464c" }
+sgx_serialize = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "3c903bdac4e503dd27b9b1f761c4abfc55f2464c" }
+sgx_alloc = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "3c903bdac4e503dd27b9b1f761c4abfc55f2464c" }
+sgx_libc = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "3c903bdac4e503dd27b9b1f761c4abfc55f2464c" }
 
 [patch.'https://github.com/apache/teaclave-sgx-sdk.git']
