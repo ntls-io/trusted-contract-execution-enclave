@@ -38,6 +38,8 @@ use std::slice;
 /// and that `result_out` is a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn exec_wasm_median_int(
+    data_in: *const u8,
+    data_len: usize,
     binary: *const u8,
     binary_len: usize,
     result_out: *mut i32,
@@ -47,7 +49,8 @@ pub unsafe extern "C" fn exec_wasm_median_int(
     }
     // Safety: SGX generated code will check that the pointer is valid.
     let binary_slice = unsafe { slice::from_raw_parts(binary, binary_len) };
-    let data = b"[1,2,3,4,5]";
+    let data = unsafe { slice::from_raw_parts(data_in, data_len) };
+
     unsafe {
         *result_out = match wasmi_impl::exec_wasm_with_data(binary_slice, data) {
             Ok(Some(wasmi::RuntimeValue::I32(ret))) => ret,
@@ -62,6 +65,8 @@ pub unsafe extern "C" fn exec_wasm_median_int(
 /// and that `result_out` is a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn exec_wasm_median_float(
+    data_in: *const u8,
+    data_len: usize,
     binary: *const u8,
     binary_len: usize,
     result_out: *mut f32,
@@ -71,7 +76,8 @@ pub unsafe extern "C" fn exec_wasm_median_float(
     }
     // Safety: SGX generated code will check that the pointer is valid.
     let binary_slice = unsafe { slice::from_raw_parts(binary, binary_len) };
-    let data = b"[1.24,2.0,3.4,4.7,5.5,10.5]";
+    let data = unsafe { slice::from_raw_parts(data_in, data_len) };
+
     unsafe {
         *result_out = match wasmi_impl::exec_wasm_with_data(binary_slice, data) {
             Ok(Some(wasmi::RuntimeValue::F32(ret))) => ret.to_float(),
@@ -86,6 +92,8 @@ pub unsafe extern "C" fn exec_wasm_median_float(
 /// and that `result_out` is a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn exec_wasm_mean_int(
+    data_in: *const u8,
+    data_len: usize,
     binary: *const u8,
     binary_len: usize,
     result_out: *mut i32,
@@ -95,7 +103,8 @@ pub unsafe extern "C" fn exec_wasm_mean_int(
     }
     // Safety: SGX generated code will check that the pointer is valid.
     let binary_slice = unsafe { slice::from_raw_parts(binary, binary_len) };
-    let data = b"[1,2,3,4,5]";
+    let data = unsafe { slice::from_raw_parts(data_in, data_len) };
+
     unsafe {
         *result_out = match wasmi_impl::exec_wasm_with_data(binary_slice, data) {
             Ok(Some(wasmi::RuntimeValue::I32(ret))) => ret,
@@ -110,6 +119,8 @@ pub unsafe extern "C" fn exec_wasm_mean_int(
 /// and that `result_out` is a valid pointer.
 #[no_mangle]
 pub unsafe extern "C" fn exec_wasm_mean_float(
+    data_in: *const u8,
+    data_len: usize,
     binary: *const u8,
     binary_len: usize,
     result_out: *mut f32,
@@ -119,7 +130,8 @@ pub unsafe extern "C" fn exec_wasm_mean_float(
     }
     // Safety: SGX generated code will check that the pointer is valid.
     let binary_slice = unsafe { slice::from_raw_parts(binary, binary_len) };
-    let data = b"[1.24,2.0,3.4,5.5,10.5]";
+    let data = unsafe { slice::from_raw_parts(data_in, data_len) };
+
     unsafe {
         *result_out = match wasmi_impl::exec_wasm_with_data(binary_slice, data) {
             Ok(Some(wasmi::RuntimeValue::F32(ret))) => ret.to_float(),

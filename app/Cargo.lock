@@ -6,6 +6,7 @@ version = 3
 name = "app"
 version = "1.0.0"
 dependencies = [
+ "serde_json",
  "sgx_types",
  "sgx_urts",
  "wabt",

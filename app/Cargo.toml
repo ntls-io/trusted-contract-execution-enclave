@@ -8,5 +8,6 @@ build = "build.rs"
 sgx_types = { git = "https://github.com/apache/teaclave-sgx-sdk.git" }
 sgx_urts = { git = "https://github.com/apache/teaclave-sgx-sdk.git"}
 wabt = "0.10.0"
+serde_json = "1.0"
 
 [patch.'https://github.com/apache/teaclave-sgx-sdk.git']
