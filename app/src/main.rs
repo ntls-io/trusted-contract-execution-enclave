@@ -14,77 +14,50 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License..
+#![feature(proc_macro_hygiene, decl_macro)]
 
+#[macro_use] extern crate rocket;
+extern crate rocket_contrib;  // Include this line
+extern crate serde;
+
+use rocket_contrib::json::Json;
+use rocket::State;
 extern crate sgx_types;
 extern crate sgx_urts;
-extern crate wabt;
 use sgx_types::*;
 use sgx_urts::SgxEnclave;
 use std::fs;
+use std::sync::{Arc, Mutex};
 
-static WASM_FILE_MEDIAN_INT: &str = "get_median_int.wasm";
-static WASM_FILE_MEDIAN_FLOAT: &str = "get_median_float.wasm";
+mod structs;
 
-static WASM_FILE_MEAN_INT: &str = "get_mean_int.wasm";
-static WASM_FILE_MEAN_FLOAT: &str = "get_mean_float.wasm";
+// Import the structs for easier reference
+use structs::{
+    IncomingAssetTransaction,
+    IncomingPaymentTransaction,
+    TransactionType,
+    DVPTransaction,
+    ReturnEnclaveTransactions,
+    ErrorResponse,
+    SuccessResponse,
+    ResponseType
+};
 
-static WASM_FILE_SD_INT: &str = "get_sd_int.wasm";
-static WASM_FILE_SD_FLOAT: &str = "get_sd_float.wasm";
 
 static ENCLAVE_FILE: &str = "enclave.signed.so";
 
+// Ecalls to enclave
 extern "C" {
-
-    fn exec_wasm_median_int(
+    fn asset_transaction_check(
         eid: sgx_enclave_id_t,
         retval: *mut sgx_status_t,
-        binary: *const u8,
-        binary_len: usize,
+        data_bytes: *const u8,
+        data_bytes: usize,
         result_out: *mut i32,
     ) -> sgx_status_t;
-
-    fn exec_wasm_median_float(
-        eid: sgx_enclave_id_t,
-        retval: *mut sgx_status_t,
-        binary: *const u8,
-        binary_len: usize,
-        result_out: *mut f32,
-    ) -> sgx_status_t;
-
-    fn exec_wasm_mean_int(
-        eid: sgx_enclave_id_t,
-        retval: *mut sgx_status_t,
-        binary: *const u8,
-        binary_len: usize,
-        result_out: *mut i32,
-    ) -> sgx_status_t;
-
-    fn exec_wasm_mean_float(
-        eid: sgx_enclave_id_t,
-        retval: *mut sgx_status_t,
-        binary: *const u8,
-        binary_len: usize,
-        result_out: *mut f32,
-    ) -> sgx_status_t;
-
-    fn exec_wasm_sd_int(
-        eid: sgx_enclave_id_t,
-        retval: *mut sgx_status_t,
-        binary: *const u8,
-        binary_len: usize,
-        result_out: *mut f32,
-    ) -> sgx_status_t;
-
-    fn exec_wasm_sd_float(
-        eid: sgx_enclave_id_t,
-        retval: *mut sgx_status_t,
-        binary: *const u8,
-        binary_len: usize,
-        result_out: *mut f32,
-    ) -> sgx_status_t;
-
 }
 
+// initatialise enclave
 fn init_enclave() -> SgxResult<SgxEnclave> {
     let mut launch_token: sgx_launch_token_t = [0; 1024];
     let mut launch_token_updated: i32 = 0;
@@ -104,6 +77,130 @@ fn init_enclave() -> SgxResult<SgxEnclave> {
     )
 }
 
+
+#[post("/check-asset-transaction", format = "json", data = "<data>")]
+fn receive_asset(enclave: State<Arc<Mutex<Option<SgxEnclave>>>>,data: Json<IncomingAssetTransaction>) -> Result<Json<ResponseType>, Json<ErrorResponse>> {
+    println!("Received: {:?}", data.0);
+    let enclave_guard = enclave.lock().unwrap();
+    
+    let enclave_instance = if let Some(ref enclave) = *enclave_guard {
+        enclave
+    } else {
+        // Handle the case when the enclave is None (shouldn't happen in normal cases)
+        panic!("Enclave is unexpectedly None!");
+    };
+
+    let data_bytes = serde_json::to_vec(&data.0).expect("Failed to convert to bytes");
+
+    let mut retval = sgx_status_t::SGX_SUCCESS;
+
+    let mut result_out_median_int = 0i32;
+    let mut result_out_median_float = 0f32;
+
+    let result = unsafe {
+        asset_transaction_check(
+            enclave_instance.geteid(),
+            &mut retval,
+            data_bytes.as_ptr(),
+            data_bytes.len(),
+            &mut result_out_median_int,
+        );
+    };
+
+    println!("Succesffuly ecalls: {:?}", result_out_median_float);
+
+    let enclave_message = "successfullmatch";  // dummy value for now, but this should come from your actual logic
+
+    if enclave_message == "successfullmatch" {
+        let transaction_1 = DVPTransaction {
+            transaction_type: TransactionType::TokenTransfer,
+            sender: "escrowaddress1234".into(),
+            recipient: "billaddress1234".into(),
+            token_id: "1".into(),
+            amount: 50,
+        };
+
+        let transaction_2 = DVPTransaction {
+            transaction_type: TransactionType::Payment,
+            sender: "escrowaddress1234".into(),
+            recipient: "alexaddress1234".into(),
+            token_id: "2".into(),
+            amount: 1,
+        };
+
+        let response = ReturnEnclaveTransactions {
+            transaction_1,
+            transaction_2,
+        };
+
+        Ok(Json(ResponseType::Transactions(response)))
+    } else if enclave_message == "successfullyadded" {
+        let success_response = SuccessResponse {
+            message: "Successfully added new DVp transaction.".into(),
+        };
+
+        Ok(Json(ResponseType::Message(success_response)))
+    } else {
+        let error_response = ErrorResponse {
+            error: "Invalid message content.".into(),
+        };
+
+        Err(Json(error_response))
+    }
+}
+
+#[post("/check-payment-transaction", format = "json", data = "<data>")]
+fn receive_payment(enclave: State<Arc<Mutex<Option<SgxEnclave>>>>,data: Json<IncomingPaymentTransaction>) -> Result<Json<ResponseType>, Json<ErrorResponse>> {
+    println!("Received: {:?}", data.0);
+        let enclave_guard = enclave.lock().unwrap();
+    
+    let enclave_instance = if let Some(ref enclave) = *enclave_guard {
+        enclave
+    } else {
+        // Handle the case when the enclave is None (shouldn't happen in normal cases)
+        panic!("Enclave is unexpectedly None!");
+    };
+    let enclave_message = "successfullmatch";  // dummy value for now, but this should come from your actual logic
+
+    if enclave_message == "successfullmatch" {
+        let transaction_1 = DVPTransaction {
+            transaction_type: TransactionType::TokenTransfer,
+            sender: "escrowaddress1234".into(),
+            recipient: "billaddress1234".into(),
+            token_id: "1".into(),
+            amount: 50,
+        };
+
+        let transaction_2 = DVPTransaction {
+            transaction_type: TransactionType::Payment,
+            sender: "escrowaddress1234".into(),
+            recipient: "alexaddress1234".into(),
+            token_id: "2".into(),
+            amount: 1,
+        };
+
+        let response = ReturnEnclaveTransactions {
+            transaction_1,
+            transaction_2,
+        };
+
+        Ok(Json(ResponseType::Transactions(response)))
+    } else if enclave_message == "successfullyadded" {
+        let success_response = SuccessResponse {
+            message: "Successfully added new DVp transaction.".into(),
+        };
+
+        Ok(Json(ResponseType::Message(success_response)))
+    } else {
+        let error_response = ErrorResponse {
+            error: "Invalid message content.".into(),
+        };
+
+        Err(Json(error_response))
+    }
+}
+
+// main function
 fn main() {
     let enclave = match init_enclave() {
         Ok(r) => {
@@ -116,92 +213,16 @@ fn main() {
         }
     };
 
-    let mut retval = sgx_status_t::SGX_SUCCESS;
+    let enclave_arc = Arc::new(Mutex::new(Some(enclave)));
 
-    let binary_median_int = fs::read(WASM_FILE_MEDIAN_INT).unwrap();
-    let binary_median_float = fs::read(WASM_FILE_MEDIAN_FLOAT).unwrap();
+   rocket::ignite()
+        .manage(enclave_arc.clone()) // Add the enclave instance as a managed state in Rocket
+        .mount("/", routes![receive_asset, receive_payment])
+        .launch();
+    
 
-    let binary_mean_int = fs::read(WASM_FILE_MEAN_INT).unwrap();
-    let binary_mean_float = fs::read(WASM_FILE_MEAN_FLOAT).unwrap();
-
-    let binary_sd_int = fs::read(WASM_FILE_SD_INT).unwrap();
-    let binary_sd_float = fs::read(WASM_FILE_SD_FLOAT).unwrap();
-
-    let mut result_out_median_int = 0i32;
-    let mut result_out_median_float = 0f32;
-
-    let mut result_out_mean_int = 0i32;
-    let mut result_out_mean_float = 0f32;
-
-    let mut result_out_sd_int = 0f32;
-    let mut result_out_sd_float = 0f32;
-
-    let result = unsafe {
-        exec_wasm_median_int(
-            enclave.geteid(),
-            &mut retval,
-            binary_median_int.as_ptr(),
-            binary_median_int.len(),
-            &mut result_out_median_int,
-        );
-
-        exec_wasm_median_float(
-            enclave.geteid(),
-            &mut retval,
-            binary_median_float.as_ptr(),
-            binary_median_float.len(),
-            &mut result_out_median_float,
-        );
-
-        exec_wasm_mean_int(
-            enclave.geteid(),
-            &mut retval,
-            binary_mean_int.as_ptr(),
-            binary_mean_int.len(),
-            &mut result_out_mean_int,
-        );
-
-        exec_wasm_mean_float(
-            enclave.geteid(),
-            &mut retval,
-            binary_mean_float.as_ptr(),
-            binary_mean_float.len(),
-            &mut result_out_mean_float,
-        );
-
-        exec_wasm_sd_int(
-            enclave.geteid(),
-            &mut retval,
-            binary_sd_int.as_ptr(),
-            binary_sd_int.len(),
-            &mut result_out_sd_int,
-        );
-
-        exec_wasm_sd_float(
-            enclave.geteid(),
-            &mut retval,
-            binary_sd_float.as_ptr(),
-            binary_sd_float.len(),
-            &mut result_out_sd_float,
-        )
-    };
-
-    match result {
-        sgx_status_t::SGX_SUCCESS => {}
-        _ => {
-            println!("[-] ECALL Enclave Failed {}!", result.as_str());
-            return;
-        }
-    }
-
-    println!("[+] ecall_test success, Median Int result -  {:?}", result_out_median_int);
-    println!("[+] ecall_test success, Median Float result -  {:?}", result_out_median_float);
-    println!();
-    println!("[+] ecall_test success, Mean Int result -  {:?}", result_out_mean_int);
-    println!("[+] ecall_test success, Mean Float result -  {:?}", result_out_mean_float);
-    println!();
-    println!("[+] ecall_test success, SD Int result -  {:?}", result_out_sd_int);
-    println!("[+] ecall_test success, SD Float result -  {:?}", result_out_sd_float);
-
+    if let Some(enclave) = enclave_arc.lock().unwrap().take() {
     enclave.destroy();
+};
+
 }

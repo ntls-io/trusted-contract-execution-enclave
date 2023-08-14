@@ -11,8 +11,9 @@ crate-type = ["staticlib"]
 default = []
 
 [dependencies]
-wasmi-impl = { path = "../wasmi-impl" }
-wasmi = { version = "0.11.0", default-features = false }
+serde = { version = "1.0", default-features = false, features = ["derive"] }
+serde-json-core = "0.1.0"
+heapless = "0.5.5"
 
 [target.'cfg(not(target_env = "sgx"))'.dependencies] # You can remove what you don't need, except types and tstd
 sgx_types = { git = "https://github.com/apache/teaclave-sgx-sdk.git" , rev = "3c903bdac4e503dd27b9b1f761c4abfc55f2464c" }
