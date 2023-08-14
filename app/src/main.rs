@@ -24,7 +24,6 @@ use rocket_contrib::json::Json;
 use rocket::State;
 extern crate sgx_types;
 extern crate sgx_urts;
-extern crate wabt;
 use sgx_types::*;
 use sgx_urts::SgxEnclave;
 use std::fs;
@@ -44,33 +43,18 @@ use structs::{
     ResponseType
 };
 
-static WASM_FILE_MEDIAN_INT: &str = "get_median_int.wasm";
-static WASM_FILE_MEDIAN_FLOAT: &str = "get_median_float.wasm";
-
 
 static ENCLAVE_FILE: &str = "enclave.signed.so";
 
 // Ecalls to enclave
 extern "C" {
-
-    fn exec_wasm_median_int(
+    fn asset_transaction_check(
         eid: sgx_enclave_id_t,
         retval: *mut sgx_status_t,
-        binary: *const u8,
-        binary_len: usize,
+        data_bytes: *const u8,
+        data_bytes: usize,
         result_out: *mut i32,
     ) -> sgx_status_t;
-
-    fn exec_wasm_median_float(
-        eid: sgx_enclave_id_t,
-        retval: *mut sgx_status_t,
-        binary: *const u8,
-        binary_len: usize,
-        result_out: *mut f32,
-    ) -> sgx_status_t;
-
-
-
 }
 
 // initatialise enclave
@@ -106,29 +90,21 @@ fn receive_asset(enclave: State<Arc<Mutex<Option<SgxEnclave>>>>,data: Json<Incom
         panic!("Enclave is unexpectedly None!");
     };
 
+    let data_bytes = serde_json::to_vec(&data.0).expect("Failed to convert to bytes");
+
     let mut retval = sgx_status_t::SGX_SUCCESS;
-    let binary_median_int = fs::read(WASM_FILE_MEDIAN_INT).unwrap();
-    let binary_median_float = fs::read(WASM_FILE_MEDIAN_FLOAT).unwrap();
 
     let mut result_out_median_int = 0i32;
     let mut result_out_median_float = 0f32;
 
     let result = unsafe {
-        exec_wasm_median_int(
+        asset_transaction_check(
             enclave_instance.geteid(),
             &mut retval,
-            binary_median_int.as_ptr(),
-            binary_median_int.len(),
+            data_bytes.as_ptr(),
+            data_bytes.len(),
             &mut result_out_median_int,
         );
-
-        exec_wasm_median_float(
-            enclave_instance.geteid(),
-            &mut retval,
-            binary_median_float.as_ptr(),
-            binary_median_float.len(),
-            &mut result_out_median_float,
-        )
     };
 
     println!("Succesffuly ecalls: {:?}", result_out_median_float);

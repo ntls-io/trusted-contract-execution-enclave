@@ -7,7 +7,6 @@ build = "build.rs"
 [dependencies] # You can specify the features you need for urts, such as global_exit and global_init
 sgx_types = { git = "https://github.com/apache/teaclave-sgx-sdk.git" }
 sgx_urts = { git = "https://github.com/apache/teaclave-sgx-sdk.git"}
-wabt = "0.10.0"
 rocket = "0.4.11"
 rocket_contrib = "0.4.11"
 serde = { version = "1.0", features = ["derive"] }
