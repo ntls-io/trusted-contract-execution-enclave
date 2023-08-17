@@ -35,6 +35,7 @@ use std::io::{ Write};
 use std::slice;
 use heapless::String;
 use std::sgxfs::SgxFile;
+use std::sgxfs::remove;
 use serde::{Deserialize};
 use std::io::Read;
 
@@ -115,13 +116,6 @@ pub unsafe extern "C" fn asset_transaction_check(
                 Err(e) => return e
             };
 
-            println!("Existing Payment Transaction recipient: {}", payment_txn.transaction.recipient);
-            println!("Incoming Asset Transaction sender: {}", incoming_txn_sender);
-        println!("Existing ayment Transaction payment_amount: {}", payment_txn.transaction.payment_amount);
-        println!("Incoming Asset Transaction agreed_trade_price: {}", deserialized_data.agreed_trade_price);
-        println!("Incoming Asset Transaction token_amount: {}", deserialized_data.transaction.token_amount);
-        println!("Existing Payment Transaction agreed_token_amount: {}", payment_txn.agreed_token_amount);
-
             // 2. Compare fields
         if payment_txn.transaction.recipient == *incoming_txn_sender && 
             payment_txn.transaction.payment_amount == deserialized_data.agreed_trade_price && 
@@ -154,6 +148,17 @@ pub unsafe extern "C" fn asset_transaction_check(
 
             for (i, &byte) in serialized_bytes.iter().enumerate() {
                     unsafe { *result_out.add(i) = byte; }
+            }
+
+            match remove(incoming_txn_recipient_str) {
+                Ok(_) => {
+                println!("Successfully deleted the file: {}", incoming_txn_recipient_str);
+                    }
+                Err(e) => {
+                    println!("Error when trying to delete the file {}: {:?}", incoming_txn_recipient_str, e);
+
+                return sgx_status_t::SGX_ERROR_UNEXPECTED;
+                }
             }
 
             return sgx_status_t::SGX_SUCCESS
@@ -251,13 +256,6 @@ pub unsafe extern "C" fn payment_transaction_check(
                 Err(e) => return e
             };
 
-            println!("Existing Asset Transaction recipient: {}", asset_txn.transaction.recipient);
-            println!("Incoming Payment Transaction sender: {}", incoming_txn_sender);
-        println!("Existing Asset Transaction token_amount: {}", asset_txn.transaction.token_amount);
-        println!("Incoming Payment Transaction agreed_trade_price: {}", deserialized_data.agreed_trade_price);
-        println!("Incoming Payment Transaction payment_amount: {}", deserialized_data.transaction.payment_amount);
-        println!("Existing Asset Transaction agreed_token_amount: {}", asset_txn.agreed_token_amount);
-
             // 2. Compare fields
         if asset_txn.transaction.recipient == *incoming_txn_sender && 
             asset_txn.transaction.token_amount == deserialized_data.agreed_token_amount && 
@@ -293,9 +291,21 @@ pub unsafe extern "C" fn payment_transaction_check(
                     unsafe { *result_out.add(i) = byte; }
             }
 
+            match remove(incoming_txn_recipient_str) {
+                Ok(_) => {
+                println!("Successfully deleted the file: {}", incoming_txn_recipient_str);
+                    }
+                Err(e) => {
+                    println!("Error when trying to delete the file {}: {:?}", incoming_txn_recipient_str, e);
+
+                return sgx_status_t::SGX_ERROR_UNEXPECTED;
+                }
+            }
+
             return sgx_status_t::SGX_SUCCESS
 
-            }}
+            }
+        }
         
         // Recipient file doesn't exist
         Err(_) => {
