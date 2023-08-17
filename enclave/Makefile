@@ -16,7 +16,7 @@ GCC_STEP1_T = -fstack-protector -I$(CUSTOM_COMMON_PATH)/inc -I$(CUSTOM_EDL_PATH)
 	-L$(LIB) $(ENCLAVE_CFLAGS) $(SGX_COMMON_CFLAGS)
 GCC_STEP2_T = -Wl,--no-undefined -nostdlib -nodefaultlibs -nostartfiles -L$(SGX_LIBRARY_PATH) \
 	-Wl,--whole-archive -l$(TRTS_LIB) -Wl,--no-whole-archive \
-	-Wl,--start-group -lsgx_tstdc -l$(SERVICE_LIB) -lsgx_tcrypto -L$(LIB) -lenclave -Wl,--end-group \
+	-Wl,--start-group -lsgx_tstdc -l$(SERVICE_LIB) -lsgx_tcrypto -lsgx_tcxx -lsgx_tprotected_fs -L$(LIB) -lenclave -Wl,--end-group \
 	-Wl,--version-script=$(SRC_T)Enclave.lds $(ENCLAVE_LDFLAGS)
 FILES_T = Enclave_t.c
 FILES_T_H = Enclave_t.h
@@ -27,6 +27,8 @@ SGX_ARCH = x64
 TRTS_LIB = sgx_trts
 SERVICE_LIB = sgx_tservice
 ENCLAVE_CARGO_LIB=libsample.a # This is the name of the enclave static library compiled by Cargo/Xargo. You will have to change it, depending of your project.
+KEYS_PRIVATE = $(SRC_T)Enclave_private.pem
+KEYS_PUBLIC = $(SRC_T)Enclave_public.pem
 # Addprefix dependant variables, no need to change those
 OUTPUT_T = $(FILES_T:.c=.o)
 NAME = $(addprefix $(BIN), $(APP_T_SIGNED))
@@ -86,12 +88,16 @@ else
 endif
 
 # Compilation process, we set up all the dependencies needed to have the correct order of build, and avoid relink
+$(KEYS_PRIVATE) $(KEYS_PUBLIC):
+	@echo "\033[32mGenerating keys...\033[0m"
+	@openssl genrsa -out $(KEYS_PRIVATE) -3 3072
+	@openssl rsa -in $(KEYS_PRIVATE) -pubout -out $(KEYS_PUBLIC)
 
 all: $(NAME)
 
 # We print the compilation mode we're in (hardware/software mode), just as a reminder.
 
-$(NAME): $(BIN_T)
+$(NAME): $(BIN_T) $(KEYS_PRIVATE)
 ifeq ($(SGX_MODE), SW)
 	@echo "\033[32mSoftware / Simulation mode\033[0m"
 else
@@ -99,9 +105,7 @@ else
 endif
 	@echo "\033[32mGenerating keys and signing the enclave...\033[0m"
 	@mkdir -p $(BIN)
-	@openssl genrsa -out Enclave_private.pem -3 3072
-	@openssl rsa -in Enclave_private.pem -pubout -out Enclave_public.pem
-	@$(SGX_ENCLAVE_SIGNER) sign -key $(SRC_T)Enclave_private.pem -enclave $(BIN_T) -out $@ -config $(SRC_T)Enclave.config.xml
+	@$(SGX_ENCLAVE_SIGNER) sign -key $(KEYS_PRIVATE) -enclave $(BIN_T) -out $@ -config $(SRC_T)Enclave.config.xml
 
 $(BIN_T): $(NAME_T_D)
 	@echo "\033[32mBuilding the enclave...\033[0m"
