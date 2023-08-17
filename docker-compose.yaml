@@ -16,7 +16,7 @@ services:
       context: .
       args:
         SGX_MODE: "SW"
-      target: run-sgx-wallet-server-sw
+      target: run-trusted-contract-execution-enclave-server-sw
     read_only: false
     init: true
     environment:
@@ -32,7 +32,7 @@ services:
       context: .
       args:
         SGX_MODE: "HW"
-      target: run-sgx-wallet-server-hw
+      target: run-trusted-contract-execution-enclave-server-hw
     read_only: false
     init: true
     environment:
