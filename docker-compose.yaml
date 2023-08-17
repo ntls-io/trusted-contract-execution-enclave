@@ -17,7 +17,7 @@ services:
       args:
         SGX_MODE: "SW"
       target: run-sgx-wallet-server-sw
-    read_only: true
+    read_only: false
     init: true
     environment:
       BIND_ADDR: "0.0.0.0:8000"
@@ -33,7 +33,7 @@ services:
       args:
         SGX_MODE: "HW"
       target: run-sgx-wallet-server-hw
-    read_only: true
+    read_only: false
     init: true
     environment:
       BIND_ADDR: "0.0.0.0:8000"
