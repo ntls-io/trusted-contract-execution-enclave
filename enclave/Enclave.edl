@@ -22,11 +22,14 @@ enclave {
     from "sgx_stdio.edl" import *;
     from "sgx_backtrace.edl" import *;
     from "sgx_tstdc.edl" import *;
+    from "sgx_tprotected_fs.edl" import *;
 
     trusted
     {
         /* ECALLs */
-        public sgx_status_t asset_transaction_check([in, count=data_bytes_len] const uint8_t* data_bytes, size_t data_bytes_len, [out] int32_t* result_out_median_int);
+        public sgx_status_t asset_transaction_check([in, count=data_bytes_len] const uint8_t* data_bytes, size_t data_bytes_len, [out, size=1024] uint8_t* result_out);
+        public sgx_status_t payment_transaction_check([in, count=data_bytes_len] const uint8_t* data_bytes, size_t data_bytes_len, [out, size=1024] uint8_t* result_out);
+
     };
     untrusted
     {

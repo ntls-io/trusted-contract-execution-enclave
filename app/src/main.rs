@@ -19,6 +19,7 @@
 #[macro_use] extern crate rocket;
 extern crate rocket_contrib;  // Include this line
 extern crate serde;
+extern crate serde_json;
 
 use rocket_contrib::json::Json;
 use rocket::State;
@@ -26,8 +27,9 @@ extern crate sgx_types;
 extern crate sgx_urts;
 use sgx_types::*;
 use sgx_urts::SgxEnclave;
-use std::fs;
 use std::sync::{Arc, Mutex};
+use std::sync::MutexGuard;
+use serde_json::Error;
 
 mod structs;
 
@@ -35,14 +37,9 @@ mod structs;
 use structs::{
     IncomingAssetTransaction,
     IncomingPaymentTransaction,
-    TransactionType,
-    DVPTransaction,
-    ReturnEnclaveTransactions,
-    ErrorResponse,
-    SuccessResponse,
-    ResponseType
+    ReturnDVPTransactions,
+    ErrorResponse
 };
-
 
 static ENCLAVE_FILE: &str = "enclave.signed.so";
 
@@ -52,8 +49,16 @@ extern "C" {
         eid: sgx_enclave_id_t,
         retval: *mut sgx_status_t,
         data_bytes: *const u8,
-        data_bytes: usize,
-        result_out: *mut i32,
+        data_bytes_len: usize,
+        result_out: *mut u8
+    ) -> sgx_status_t;
+    
+    fn payment_transaction_check(
+        eid: sgx_enclave_id_t,
+        retval: *mut sgx_status_t,
+        data_bytes: *const u8,
+        data_bytes_len: usize,
+        result_out: *mut u8
     ) -> sgx_status_t;
 }
 
@@ -77,126 +82,94 @@ fn init_enclave() -> SgxResult<SgxEnclave> {
     )
 }
 
-
-#[post("/check-asset-transaction", format = "json", data = "<data>")]
-fn receive_asset(enclave: State<Arc<Mutex<Option<SgxEnclave>>>>,data: Json<IncomingAssetTransaction>) -> Result<Json<ResponseType>, Json<ErrorResponse>> {
-    println!("Received: {:?}", data.0);
+fn get_enclave_instance<'a>(enclave: &'a State<Arc<Mutex<Option<SgxEnclave>>>>) -> MutexGuard<'a, Option<SgxEnclave>> {
     let enclave_guard = enclave.lock().unwrap();
-    
-    let enclave_instance = if let Some(ref enclave) = *enclave_guard {
-        enclave
-    } else {
-        // Handle the case when the enclave is None (shouldn't happen in normal cases)
+    if enclave_guard.is_none() {
         panic!("Enclave is unexpectedly None!");
-    };
+    }
+    enclave_guard
+}
 
+fn execute_asset_transaction(enclave_instance: &SgxEnclave, data: &Json<IncomingAssetTransaction>) -> [u8; 1024] {
     let data_bytes = serde_json::to_vec(&data.0).expect("Failed to convert to bytes");
-
     let mut retval = sgx_status_t::SGX_SUCCESS;
-
-    let mut result_out_median_int = 0i32;
-    let mut result_out_median_float = 0f32;
-
-    let result = unsafe {
+    let mut result_out: [u8; 1024] = [0; 1024];
+    
+    unsafe {
         asset_transaction_check(
             enclave_instance.geteid(),
             &mut retval,
             data_bytes.as_ptr(),
             data_bytes.len(),
-            &mut result_out_median_int,
+            result_out.as_mut_ptr(),
         );
-    };
+    }
+    
+    result_out
+}
 
-    println!("Succesffuly ecalls: {:?}", result_out_median_float);
+fn execute_payment_transaction(enclave_instance: &SgxEnclave, data: &Json<IncomingPaymentTransaction>) -> [u8; 1024] {
+    let data_bytes = serde_json::to_vec(&data.0).expect("Failed to convert to bytes");
+    let mut retval = sgx_status_t::SGX_SUCCESS;
+    let mut result_out: [u8; 1024] = [0; 1024];
+    
+    unsafe {
+        payment_transaction_check(
+            enclave_instance.geteid(),
+            &mut retval,
+            data_bytes.as_ptr(),
+            data_bytes.len(),
+            result_out.as_mut_ptr(),
+        );
+    }
+    
+    result_out
+}
 
-    let enclave_message = "successfullmatch";  // dummy value for now, but this should come from your actual logic
 
-    if enclave_message == "successfullmatch" {
-        let transaction_1 = DVPTransaction {
-            transaction_type: TransactionType::TokenTransfer,
-            sender: "escrowaddress1234".into(),
-            recipient: "billaddress1234".into(),
-            token_id: "1".into(),
-            amount: 50,
-        };
+#[post("/check-asset-transaction", format = "json", data = "<data>")]
+fn receive_asset(enclave: State<Arc<Mutex<Option<SgxEnclave>>>>, data: Json<IncomingAssetTransaction>) -> Result<Json<ReturnDVPTransactions>, Json<ErrorResponse>> {
+    
+    let enclave_guard = get_enclave_instance(&enclave);
+    let result_out = execute_asset_transaction(enclave_guard.as_ref().unwrap(), &data);
 
-        let transaction_2 = DVPTransaction {
-            transaction_type: TransactionType::Payment,
-            sender: "escrowaddress1234".into(),
-            recipient: "alexaddress1234".into(),
-            token_id: "2".into(),
-            amount: 1,
-        };
+    let end_of_data = result_out.iter().position(|&x| x == 0).unwrap_or(result_out.len());
+    let meaningful_data = &result_out[0..end_of_data];
 
-        let response = ReturnEnclaveTransactions {
-            transaction_1,
-            transaction_2,
-        };
+    let deserialized: Result<ReturnDVPTransactions, Error> = serde_json::from_slice(meaningful_data);
+    println!("Deserialized data: {:?}", deserialized);
 
-        Ok(Json(ResponseType::Transactions(response)))
-    } else if enclave_message == "successfullyadded" {
-        let success_response = SuccessResponse {
-            message: "Successfully added new DVp transaction.".into(),
-        };
-
-        Ok(Json(ResponseType::Message(success_response)))
-    } else {
-        let error_response = ErrorResponse {
-            error: "Invalid message content.".into(),
-        };
-
-        Err(Json(error_response))
+    match deserialized {
+        Ok(value) => Ok(Json(value)),
+        Err(_) => {
+            let error_response = ErrorResponse {
+                error: "Error in deserializing the returned data from the enclave.".into(),
+            };
+            Err(Json(error_response))
+        }
     }
 }
 
 #[post("/check-payment-transaction", format = "json", data = "<data>")]
-fn receive_payment(enclave: State<Arc<Mutex<Option<SgxEnclave>>>>,data: Json<IncomingPaymentTransaction>) -> Result<Json<ResponseType>, Json<ErrorResponse>> {
-    println!("Received: {:?}", data.0);
-        let enclave_guard = enclave.lock().unwrap();
+fn receive_payment(enclave: State<Arc<Mutex<Option<SgxEnclave>>>>,data: Json<IncomingPaymentTransaction>) -> Result<Json<ReturnDVPTransactions>, Json<ErrorResponse>> {
     
-    let enclave_instance = if let Some(ref enclave) = *enclave_guard {
-        enclave
-    } else {
-        // Handle the case when the enclave is None (shouldn't happen in normal cases)
-        panic!("Enclave is unexpectedly None!");
-    };
-    let enclave_message = "successfullmatch";  // dummy value for now, but this should come from your actual logic
+    let enclave_guard = get_enclave_instance(&enclave);
+    let result_out = execute_payment_transaction(enclave_guard.as_ref().unwrap(), &data);
 
-    if enclave_message == "successfullmatch" {
-        let transaction_1 = DVPTransaction {
-            transaction_type: TransactionType::TokenTransfer,
-            sender: "escrowaddress1234".into(),
-            recipient: "billaddress1234".into(),
-            token_id: "1".into(),
-            amount: 50,
-        };
+    let end_of_data = result_out.iter().position(|&x| x == 0).unwrap_or(result_out.len());
+    let meaningful_data = &result_out[0..end_of_data];
 
-        let transaction_2 = DVPTransaction {
-            transaction_type: TransactionType::Payment,
-            sender: "escrowaddress1234".into(),
-            recipient: "alexaddress1234".into(),
-            token_id: "2".into(),
-            amount: 1,
-        };
+    let deserialized: Result<ReturnDVPTransactions, Error> = serde_json::from_slice(meaningful_data);
+    println!("Deserialized data: {:?}", deserialized);
 
-        let response = ReturnEnclaveTransactions {
-            transaction_1,
-            transaction_2,
-        };
-
-        Ok(Json(ResponseType::Transactions(response)))
-    } else if enclave_message == "successfullyadded" {
-        let success_response = SuccessResponse {
-            message: "Successfully added new DVp transaction.".into(),
-        };
-
-        Ok(Json(ResponseType::Message(success_response)))
-    } else {
-        let error_response = ErrorResponse {
-            error: "Invalid message content.".into(),
-        };
-
-        Err(Json(error_response))
+    match deserialized {
+        Ok(value) => Ok(Json(value)),
+        Err(_) => {
+            let error_response = ErrorResponse {
+                error: "Error in deserializing the returned data from the enclave.".into(),
+            };
+            Err(Json(error_response))
+        }
     }
 }
 
