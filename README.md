@@ -1,10 +1,8 @@
-# NTC - Execution Enclave and Service Development Repo
+# Trusted Contracts  - Execution Enclave and Service Development Repo
 
-This repo serves as the development repo for the Exeuction Service and Execution Enclave for NTC.
+This repo serves as the development repo for the Exeuction Service and Execution Enclave for Trusted Contracts.
 The `app` directoy represents the execution service. 
 The `enclave` directory represents the execution enclave. 
-The `get-**-wasm` files represent rust code binaries.
-The `wasmi-impl` represents a wasm binary compiler to convert and run the rust binaries to wasm code. 
 
 ## Installation
 
@@ -64,7 +62,7 @@ use the convenience scripts provided at [rust-sgx-sdk-env].
    and `cd` into it.
 4. Run the latest "prepare" script:
    ```
-   $ ./prepare-1.1.14-intel-2.15.1.sh
+   $ ./prepare-1.1.16-intel-2.20.sh
    ```
 5. Finally, assuming `bash` is the current shell, source the environment file in
    the top level of the repository:
@@ -78,18 +76,13 @@ use the convenience scripts provided at [rust-sgx-sdk-env].
    properly.
 2. Clone the project repository
     ```
-    $ git clone https://github.com/ntls-io/wasm-exec-sgx
+    $ git clone https://github.com/ntls-io/trusted-contract-execution-enclave
     ```
    and `cd` into it.
 3. Run `make` to compile the entire project.
 4. To run the main application, change to bin/ and execute the following:
      ```
     ./app
-    ```
-5. In order to test the provided Wasm binary, change the current directory to
-   the `wasmi-impl` subdirectory and execute the following:
-    ```
-    cargo test
     ```
 
 [docker-postinstall]: https://docs.docker.com/engine/install/linux-postinstall/
